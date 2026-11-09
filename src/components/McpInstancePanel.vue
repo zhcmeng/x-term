@@ -197,24 +197,31 @@ const RUN_MODE_OPTIONS: {
   {
     value: "auto",
     label: "自动运行",
-    desc: "全部自动执行（文件传输仍需确认）",
+    desc: "全部自动执行（文件传输按独立开关）",
   },
 ];
 
 /** 当前模式的说明文案（按 kind 展开白名单的具体含义）。 */
 const runModeDesc = computed(() => {
-  switch (config.value.runMode) {
-    case "auto":
-      return "外部客户端的所有调用直接执行，不弹确认（文件传输除外）";
-    case "whitelist":
-      return isSsh.value
-        ? "命令白名单内自动执行（同「设置 → AI」的 SSH 白名单），其余弹确认"
-        : isFile.value
-          ? "读操作自动执行，文件上传/下载仍弹确认"
-          : "只读 SQL（SELECT/SHOW/EXPLAIN/DESCRIBE）自动执行，其余弹确认";
-    default:
-      return "外部客户端的每次调用都需你在 X-Term 中确认后执行";
-  }
+  const base = (() => {
+    switch (config.value.runMode) {
+      case "auto":
+        return "外部客户端的所有调用直接执行，不弹确认";
+      case "whitelist":
+        return isSsh.value
+          ? "命令白名单内自动执行（同「设置 → AI」的 SSH 白名单），其余弹确认"
+          : isFile.value
+            ? "读操作自动执行，其余弹确认"
+            : "只读 SQL（SELECT/SHOW/EXPLAIN/DESCRIBE）自动执行，其余弹确认";
+      default:
+        return "外部客户端的每次调用都需你在 X-Term 中确认后执行";
+    }
+  })();
+  // 文件工具不受运行模式约束，单独由「文件传输」开关决定，这里如实标出。
+  if (!isSsh.value && !isFile.value) return base;
+  return config.value.fileTransferAuto
+    ? `${base}；文件传输直接执行`
+    : `${base}；文件传输需逐次确认`;
 });
 
 /** 运行模式的说明（悬浮帮助）。 */
@@ -222,7 +229,8 @@ const runModeHint =
   "与 AI 助手的执行模式语义一致：手动运行 = 所有调用人工确认；\
 白名单运行 = 白名单内自动放行（SSH 为「设置 → AI」的命令白名单、DB 为只读 SQL、\
 文件为读操作），其余人工确认；自动运行 = 全部自动执行。\
-例外：upload_file / download_file 读写本机任意路径，任何模式下都强制人工确认。";
+文件工具（upload_file / download_file / bastion_upload_file）能读写本机任意路径，\
+不受运行模式影响：默认强制人工确认，开启该连接的「文件传输」开关后直接执行。";
 
 /** 记录执行日志开关的说明（悬浮帮助）。 */
 const logHint =
