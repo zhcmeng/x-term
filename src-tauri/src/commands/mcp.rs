@@ -83,6 +83,10 @@ pub struct McpInstanceConfig {
     /// - `auto`：全部自动执行（例外：文件传输工具仍强制人工确认）。
     #[serde(default = "default_run_mode")]
     pub run_mode: String,
+    /// 文件传输工具（upload_file / download_file / bastion_upload_file）
+    /// 是否跳过人工确认。默认 false，保持强制确认。
+    #[serde(default = "default_file_transfer_auto")]
+    pub file_transfer_auto: bool,
     /// 旧字段（仅向后兼容读取，不再写出）：旧 mcp.json 的 `autoApprove: true`
     /// 在 [`instance_config`] 中迁移为 `run_mode = "auto"`。
     #[serde(default, skip_serializing)]
@@ -110,6 +114,11 @@ pub struct McpInstanceConfig {
 /// 默认运行模式：全部人工确认（最安全）。
 fn default_run_mode() -> String {
     "manual".into()
+}
+
+/// 文件传输开关默认值：关闭（保持人工确认）。
+fn default_file_transfer_auto() -> bool {
+    false
 }
 
 /// 规范化运行模式：仅 manual / whitelist / auto 合法，其余一律回退 manual
@@ -197,6 +206,7 @@ impl McpInstanceConfig {
             bound_source: default_bound_source(),
             bound_database: None,
             run_mode: default_run_mode(),
+            file_transfer_auto: false,
             auto_approve: false,
             enable_log: true,
             idle_timeout_minutes: default_idle_timeout_minutes(),
@@ -735,4 +745,38 @@ fn tail_read_lines(path: &std::path::Path, max_lines: usize) -> std::io::Result<
     } else {
         lines.join("\n")
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 旧配置没有 fileTransferAuto 字段时，解析后必须是 false（保持人工确认）。
+    #[test]
+    fn file_transfer_auto_defaults_to_false_when_absent() {
+        let json = r#"{
+            "enabled": false,
+            "host": "127.0.0.1",
+            "port": 8765,
+            "resourceMode": "bound",
+            "boundSource": "config",
+            "runMode": "manual",
+            "enableLog": true,
+            "idleTimeoutMinutes": 15,
+            "baseIdleMinutes": 30
+        }"#;
+        let c: McpInstanceConfig = serde_json::from_str(json).unwrap();
+        assert!(!c.file_transfer_auto);
+    }
+
+    /// 打开开关后能序列化并原样读回。
+    #[test]
+    fn file_transfer_auto_round_trips() {
+        let mut c = McpInstanceConfig::default_for(McpKind::Ssh);
+        c.file_transfer_auto = true;
+        let json = serde_json::to_string(&c).unwrap();
+        assert!(json.contains("\"fileTransferAuto\":true"));
+        let back: McpInstanceConfig = serde_json::from_str(&json).unwrap();
+        assert!(back.file_transfer_auto);
+    }
 }

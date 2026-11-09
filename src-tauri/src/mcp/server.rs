@@ -111,6 +111,21 @@ pub fn run_mode_of(kind: McpKind) -> String {
         .unwrap_or_else(|| "manual".into())
 }
 
+/// 运行时文件传输开关（per-kind）：true 表示该连接的文件工具跳过人工确认。
+/// `mcp_save_config` 更新此值，改后立即生效无需重启。
+static FILE_TRANSFER_AUTO: Lazy<Mutex<HashMap<McpKind, bool>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// 设置指定 kind 的文件传输开关。
+pub fn set_file_transfer_auto(kind: McpKind, auto: bool) {
+    FILE_TRANSFER_AUTO.lock().insert(kind, auto);
+}
+
+/// 查询指定 kind 的文件传输开关（默认 false，保持人工确认）。
+pub fn file_transfer_auto_of(kind: McpKind) -> bool {
+    FILE_TRANSFER_AUTO.lock().get(&kind).copied().unwrap_or(false)
+}
+
 /// 运行模式的中文标签（执行日志头部用）。
 fn run_mode_label(mode: &str) -> &'static str {
     match mode {
@@ -1939,5 +1954,15 @@ mod tests {
             .unwrap();
         let q = Query::<MessagesQuery>::from_request(req, &()).await.unwrap();
         assert_eq!(q.session_id.as_deref(), Some("xyz"));
+    }
+
+    /// 文件传输开关默认关闭；设置后查询返回设置值。
+    #[test]
+    fn file_transfer_auto_default_and_toggle() {
+        assert!(!file_transfer_auto_of(McpKind::Ssh));
+        set_file_transfer_auto(McpKind::Ssh, true);
+        assert!(file_transfer_auto_of(McpKind::Ssh));
+        set_file_transfer_auto(McpKind::Ssh, false);
+        assert!(!file_transfer_auto_of(McpKind::Ssh));
     }
 }
