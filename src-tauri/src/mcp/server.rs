@@ -135,6 +135,30 @@ fn run_mode_label(mode: &str) -> &'static str {
     }
 }
 
+/// 是否为文件传输工具（能读写本机任意路径）。
+pub(crate) fn is_file_tool_name(name: &str) -> bool {
+    matches!(
+        name,
+        "upload_file" | "download_file" | "bastion_upload_file"
+    )
+}
+
+/// 本次调用是否跳过人工确认。
+///
+/// 文件工具只受该连接的文件传输开关控制；其它工具按运行模式与白名单判定。
+pub(crate) fn auto_run_decision(
+    is_file_tool: bool,
+    mode: &str,
+    whitelist_hit: bool,
+    file_auto: bool,
+) -> bool {
+    if is_file_tool {
+        file_auto
+    } else {
+        mode == "auto" || whitelist_hit
+    }
+}
+
 /// 查询指定 kind 的服务端状态（未启动时返回 running=false）。
 pub fn mcp_server_status(kind: McpKind) -> McpServerStatus {
     let guard = SERVERS.lock();
@@ -1202,21 +1226,26 @@ async fn handle_tool_call(
     // - manual：人工确认（默认）；
     // - auto：全部自动执行；
     // - whitelist：白名单内自动放行（SSH=命令白名单、DB=只读 SQL），其余确认。
-    // 例外：文件传输工具（upload_file / download_file / bastion_upload_file）
-    // 读写**本机任意路径**（localPath 不设沙箱是功能刚需——外部客户端要把本机
-    // 任意文件上传到 S3/SFTP/目标主机），无论何种模式都必须人工确认；确认卡片
-    // 会展示完整的本地/远端路径与目标，用户可见可控。
+    // 文件传输工具（upload_file / download_file / bastion_upload_file）能读写
+    // 本机任意路径，默认仍强制人工确认；打开该连接的「文件传输」开关后不再确认。
     let mode = run_mode_of(shared.kind);
-    let is_file_tool = matches!(
-        name,
-        "upload_file" | "download_file" | "bastion_upload_file"
+    let is_file_tool = is_file_tool_name(name);
+    let whitelist_hit =
+        mode == "whitelist" && tools::is_whitelist_auto(&shared.state, name, arguments);
+    let auto_run = auto_run_decision(
+        is_file_tool,
+        &mode,
+        whitelist_hit,
+        file_transfer_auto_of(shared.kind),
     );
-    let whitelist_hit = mode == "whitelist"
-        && !is_file_tool
-        && tools::is_whitelist_auto(&shared.state, name, arguments);
-    let auto_run = (mode == "auto" || whitelist_hit) && !is_file_tool;
     if auto_run {
-        let tag = if whitelist_hit { "白名单放行" } else { "自动放行" };
+        let tag = if is_file_tool {
+            "文件传输自动放行"
+        } else if whitelist_hit {
+            "白名单放行"
+        } else {
+            "自动放行"
+        };
         log::info!(
             "[mcp] {} {}，直接执行（目标: {}）",
             shared.kind.label(),
@@ -1964,5 +1993,32 @@ mod tests {
         assert!(file_transfer_auto_of(McpKind::Ssh));
         set_file_transfer_auto(McpKind::Ssh, false);
         assert!(!file_transfer_auto_of(McpKind::Ssh));
+    }
+
+    /// 自动执行判定真值表：文件工具只看文件开关，其它工具看运行模式。
+    #[test]
+    fn auto_run_decision_truth_table() {
+        // 非文件工具：auto 全放行；manual 全确认；whitelist 看是否命中。
+        assert!(auto_run_decision(false, "auto", false, false));
+        assert!(!auto_run_decision(false, "manual", false, true));
+        assert!(auto_run_decision(false, "whitelist", true, false));
+        assert!(!auto_run_decision(false, "whitelist", false, false));
+        // 文件工具：只受文件开关控制，run_mode 与白名单都不参与。
+        assert!(auto_run_decision(true, "manual", false, true));
+        assert!(!auto_run_decision(true, "auto", false, false));
+        assert!(!auto_run_decision(true, "whitelist", true, false));
+        assert!(auto_run_decision(true, "whitelist", true, true));
+    }
+
+    /// 三个文件工具都被识别；exec_ssh / exec_sql / list_* 不算。
+    #[test]
+    fn is_file_tool_name_matches_only_transfer_tools() {
+        assert!(is_file_tool_name("upload_file"));
+        assert!(is_file_tool_name("download_file"));
+        assert!(is_file_tool_name("bastion_upload_file"));
+        assert!(!is_file_tool_name("exec_ssh"));
+        assert!(!is_file_tool_name("exec_sql"));
+        assert!(!is_file_tool_name("list_files"));
+        assert!(!is_file_tool_name("bastion_session_exec"));
     }
 }
