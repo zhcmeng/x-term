@@ -446,6 +446,7 @@ pub async fn mcp_start(
         cfg.bound_database,
         resource_mode,
         cfg.run_mode,
+        cfg.file_transfer_auto,
         cfg.enable_log,
         bastion,
     )
@@ -489,6 +490,7 @@ pub async fn mcp_save_config(
         let mut config = config;
         config.run_mode = normalize_run_mode(&config.run_mode);
         crate::mcp::server::set_run_mode(kind, &config.run_mode);
+        crate::mcp::server::set_file_transfer_auto(kind, config.file_transfer_auto);
         set_instance_config(state.inner(), kind, config)
     })
     .await

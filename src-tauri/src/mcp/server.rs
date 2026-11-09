@@ -218,6 +218,7 @@ pub async fn start_mcp_server(
     bound_database: Option<String>,
     resource_mode: String,
     run_mode: String,
+    file_transfer_auto: bool,
     enable_log: bool,
     bastion: bastion::BastionOptions,
 ) -> AppResult<()> {
@@ -231,8 +232,9 @@ pub async fn start_mcp_server(
         }
     }
 
-    // 启动时设置运行模式。
+    // 启动时设置运行模式与文件传输开关。
     set_run_mode(kind, &run_mode);
+    set_file_transfer_auto(kind, file_transfer_auto);
 
     // 资源模式规范化：multi / bastion 仅 SSH kind 支持（其它 kind 回退 bound），
     // 其余按 client / bound 处理。
