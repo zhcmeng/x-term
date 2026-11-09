@@ -49,6 +49,7 @@ export const useMcpStore = defineStore("mcp", () => {
       boundSource: "config",
       boundDatabase: undefined,
       runMode: "manual",
+      fileTransferAuto: false,
       enableLog: true,
       // 堡垒机模式：目标会话空闲 15 分钟自动回收（0 = 不回收）。
       idleTimeoutMinutes: 15,

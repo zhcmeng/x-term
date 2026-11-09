@@ -558,6 +558,22 @@ async function saveRunMode() {
   }
 }
 
+/** 文件传输开关切换：保存配置（后端立即生效，无需重启）。 */
+async function saveFileTransferAuto() {
+  try {
+    await mcp.saveConfig(props.kind);
+    lastSaved = { ...config.value };
+    ElMessage.success(
+      config.value.fileTransferAuto
+        ? "文件传输已改为自动执行"
+        : "文件传输已改为逐次确认"
+    );
+  } catch (e) {
+    rollbackConfig();
+    ElMessage.error("保存失败：" + String(e));
+  }
+}
+
 async function start() {
   // 多机模式：勾选集合非空即可（无单选 resourceId）。
   if (multiMode.value) {
@@ -960,6 +976,26 @@ onMounted(async () => {
             :title="opt.desc"
           />
         </el-select>
+      </div>
+
+      <!-- 文件传输开关（仅 ssh / file 有文件工具） -->
+      <div v-if="isSsh || isFile" class="switch-row">
+        <div class="switch-info">
+          <div class="switch-title">
+            文件传输
+            <HelpTip
+              content="打开后，该连接的上传、下载不再逐次弹确认。文件工具能读写本机任意路径，请只在信任外部客户端时打开。"
+            />
+          </div>
+          <div class="switch-desc">
+            {{
+              config.fileTransferAuto
+                ? "上传、下载直接执行，不弹确认"
+                : "每次上传、下载都要人工确认"
+            }}
+          </div>
+        </div>
+        <el-switch v-model="config.fileTransferAuto" @change="saveFileTransferAuto" />
       </div>
 
       <!-- 执行日志开关 -->

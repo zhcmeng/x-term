@@ -63,6 +63,11 @@ export interface McpInstanceConfig {
    * - "auto"：全部自动执行（文件传输工具仍强制人工确认）。
    */
   runMode: "manual" | "whitelist" | "auto";
+  /**
+   * 文件传输工具（upload_file / download_file / bastion_upload_file）
+   * 是否跳过人工确认。默认 false。仅 ssh / file 两种 kind 有意义。
+   */
+  fileTransferAuto: boolean;
   /** 是否记录执行日志到文本文件（每次启动生成一个日志文件）。默认 true。 */
   enableLog: boolean;
   /** 堡垒机目标主机会话空闲自动回收时长（分钟，仅 ssh + bastion 模式）。0 = 不回收。默认 15。 */
