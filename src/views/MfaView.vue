@@ -59,9 +59,12 @@ async function refreshAllCodes() {
       if (lastFail && now - lastFail < RETRY_BACKOFF_MS) return;
       try {
         const c = await totpApi.totpGenerate(e.id);
+        const nowS = Math.floor(Date.now() / 1000);
         next.set(e.id, {
           code: c.code,
-          codeTs: Math.floor(Date.now() / 1000),
+          // codeTs 记窗口起点而不是取到码的时刻：用后端返回的剩余秒数反推，
+          // 否则每次刷新倒计时都会从 period 重新开始，显示的时间比码的真实寿命长。
+          codeTs: nowS - (e.period - c.remainingSeconds),
           period: e.period,
         });
         failedAt.value.delete(e.id);
@@ -291,9 +294,10 @@ async function submitAdd() {
     // 立即生成码。
     try {
       const c = await totpApi.totpGenerate(entry.id);
+      const nowS = Math.floor(Date.now() / 1000);
       codes.value.set(entry.id, {
         code: c.code,
-        codeTs: Math.floor(Date.now() / 1000),
+        codeTs: nowS - (entry.period - c.remainingSeconds),
         period: entry.period,
       });
     } catch {
